@@ -501,6 +501,7 @@ var apis = [{
 function hook(api) {
     var toHook;
     try {
+		// 선언된 api의 class와 method를 불러옴
         var clazz = api.class;
         var method = api.method;
         var name = api.name;
@@ -508,7 +509,9 @@ function hook(api) {
             if (api.target && parseInt(Java.androidVersion, 10) < api.target) {
                 return []
             }
+			// apk 내에서 사용되는 api중에서 선언된 api가 있는지 확인
             toHook = Java.use(clazz)[method];
+			// toHook이 비어 있으면 빈 리스트를 return
             if (!toHook) {
                 return []
             }
@@ -518,6 +521,7 @@ function hook(api) {
         var result = []
         var overloadCount = toHook.overloads.length;
         for (var i = 0; i < overloadCount; i++) {
+			// apk 내에서 사용되는 api의 이름들을 result 변수에 넣음
             var apiObj = clazz;
             if (result.findIndex(a => JSON.stringify(a) === JSON.stringify(apiObj)) === -1) {
                 result.push(apiObj);
@@ -526,22 +530,34 @@ function hook(api) {
                 return this[method].apply(this, arguments);
             }
         }
+		// result 값을 return
         return result;
     } catch (err) {
         return [];
     }
 }
 
+// 파이썬으로 결과 값을 보내기 위해서 사용
 rpc.exports = {
-  apimonitor: function () {Java.performNow(function () {
-    var apiList = []
-    apis.forEach(function (api) {
-        apiList.push.apply(apiList, hook(api))
-    });
-    apiList = apiList.filter(function (api, index, self) {
-        return index === self.findIndex(a => JSON.stringify(a) === JSON.stringify(api));
-    });
-    send(apiList.length);
-});
-  }
+	// 파이썬에서 사용되는 함수 이름을 apimonitor로 지정
+	apimonitor: function () {
+		// 현재 스레드가 가상머신에 연결되어 있는지 확인하고 function을 호출
+		Java.performNow(function () {
+			// api들이 담길 리스트 선언
+			var apiList = []
+			
+			// 정의된 api 목록들을 forEach문으로 호출
+			apis.forEach(function (api) {
+				// hook 함수에서 apk에서 사용되는 api 목록들을 가져옴
+				apiList.push.apply(apiList, hook(api))
+				});
+			// api 중복제거
+			apiList = apiList.filter(function (api, index, self) {
+				return index === self.findIndex(a => JSON.stringify(a) === JSON.stringify(api));
+				});
+				
+			// send 형태로 api 목록들을 파이썬으로 보냄
+			send(apiList);
+		});
+	}
 };
